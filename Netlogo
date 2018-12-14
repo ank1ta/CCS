@@ -1,1 +1,55 @@
-here is some text
+breed [industries industry] ;create the turtle breed 'industries'
+breed [environment a-environment] ; create the turtle breed 'environments'
+breed [ccs a-ccs] ; create the turtle breed 'ccs'
+
+industries-own [industry-carbon-emission] ;turtles own means that it is for all the turtles (so actually it will be industries-own if you want it to only account for the industry turtles.
+
+
+to setup
+  clear-all
+  setup-patches
+  setup-industries
+  setup-environment
+  setup-ccs
+  reset-ticks
+end
+
+to setup-patches
+  ask patches [ set pcolor green ] ;makes all patches green
+  ask patches with [ pycor < min-pycor + 8] [ set pcolor brown ]
+  ask patches with [ pycor > max-pycor - 10] [ set pcolor blue ]
+end
+
+to setup-industries
+  create-industries 25 [
+    setxy random-pxcor random-pycor  ;create 25 industries on random coordinates but in the center of the patch
+    move-to one-of patches with [ pcolor = green ]  ;move these created industries to the green patches.
+  ]
+  set-default-shape industries "factory" ;give the industries the shape of a circle
+  ask industries [set size 2.5] ;to make them more visable
+  eat-carbon ;feeds carbon (energy) to the industries (placed it within setup as you don't want this to change every go).
+end
+
+to eat-carbon ;feeds carbon (energy) to the industries.
+  ask industries [
+    set industry-carbon-emission ((1 + (random 10)) * 1000)* 3.2 ; picks a random number within 1-10 as oil demand and multiplies this with CO2 emission/Mton oil (tried to enter 'carbon' instead of 'energy' but that doesn't work because energy is a build in demand)
+    ifelse show-carbon? ;relates to the switch in the interface whether you want to show the carbon level of one industry or not.
+      [ set label industry-carbon-emission ]
+      [ set label "" ]
+  ]
+end
+
+to setup-environment
+  create-environment 1 [setxy 0 11]  ;
+  set-default-shape environment "cloud" ;give the industries the shape of a circle
+  ask environment [set size 8] ;to make them more visable
+  ask environment [set color white]
+end
+
+to setup-ccs
+  create-ccs 1 [setxy 0 -12]  ;
+  set-default-shape ccs "square" ;give the industries the shape of a circle
+  ask ccs [set size 5] ;to make them more visable
+  ask ccs [set color grey]
+
+end
