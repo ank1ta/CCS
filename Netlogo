@@ -1,3 +1,393 @@
-set something
-as s omething
-more words
+breed [industries industry] ;create the turtle breed 'industries'
+breed [environment a-environment] ; create the turtle breed 'environments'
+
+patches-own [
+  carbon-stored
+  max-capacity
+  name-location
+]
+
+turtles-own [
+  industry-oil-demand ;set randomly (Mton of oil)
+  industry-oil-expenses ;industry-oil-demand * oil-price, re-calculated by the no-ccs industries every tick
+  industry-carbon-emission ; industry-oil-demand * 3.2
+  industry-carbon-expenses ;industry-electrified-emissions * carbon price
+  industry-ccs-expenses ;median-opex/capacity * industry-electrified-emissions --> median-opex is reducing every year due to improvements in technology
+  join-ccs ;tells whether an industry joins ccs with "no" or "yes"
+  remaining-emissions ;the remaining emissions after electrification
+  carbon-stored-per-indus
+] ;the amount of carbon stored per industry
+
+globals [
+  environment-carbon-emission ;the total amount of carbon that is emissioned to the environment
+  oil-price ;changes every year, starts with 450 MEur/Mton
+  carbon-price ;changes every year, starts with 20
+  median-opex ;median of the opex per storage location
+  subsidy ;government subsidy in Meur decided by a slider
+  capacity ;capacity of the median opex storage
+  yearly-info-list ;contains the yearly information (year, carbon-price, oil-price)
+  ccs-list ;contains the information of the storage locations
+  year
+  total-carbon-for-storage ;sum of all carbon that needs to be stored by industries
+  total-carbon-emitted ;sum of all carbon that is emitted by industries
+  ccs
+  ccs-patches ;setup of the storage location patches
+  decision-year ;the year in which a decision is made ranging from year 1 - 32
+  yes-ccs
+  no-ccs
+  industries-emit
+  industries-stored
+  sum-industries-emit
+  sum-industries-stored
+  avg-industries-emit ;average amount emitted of one industry in 32 years
+  avg-industries-stored ;average amount stored of one industry in 32 years
+  total-emissions
+  ]
+
+to setup
+  clear-all
+  setup-patches
+  setup-industries
+  setup-environment
+  setup-ccs
+  setup-data
+  set year 0
+  set ccs 0
+  reset-ticks
+end
+
+
+to setup-patches ;making a visual display of storage, green field of por and a blue sky
+  ask patches [ set pcolor green ] ;makes all patches green
+  ask patches with [ pycor < min-pycor + 4] [ set pcolor brown ]
+  ask patches with [ pycor > max-pycor - 10] [ set pcolor blue ]
+end
+
+
+to setup-industries
+  create-industries 25 [
+    setxy random-pxcor random-pycor  ;create 25 industries on random coordinates but in the center of the patch
+    move-to one-of patches with [ pcolor = green ]  ;move these created industries to the green patches.
+  ]
+  set-default-shape industries "factory" ;give the industries the shape of a factory
+  ask industries [set size 2.5 set color black] ;to make them more visable
+  eat-carbon ;feeds carbon (energy) to the industries
+  set total-emissions (sum [industry-carbon-emission] of industries)
+end
+
+
+to eat-carbon ;assigns carbon (energy) to the industries.
+  ask industries [
+    set industry-oil-demand ((0.1 + 0.1 * (random oil-demand-range))) ;random number between 0.1 and (0.1 * oil-demand-range set by user)
+    set industry-carbon-emission precision (industry-oil-demand * 3.2) 4 ; picks the oil demand and multiplies this with CO2 emission/Mton oil
+    ifelse show-carbon? ;relates to the switch in the interface whether you want to show the carbon level of one industry or not.
+      [ set label precision industry-carbon-emission 2 ]
+      [ set label "" ]
+  ]
+end
+
+
+to setup-environment
+  create-environment 1 [setxy 0 11]  ;
+  set-default-shape environment "cloud" ;give the industries the shape of a cloud
+  ask environment [set size 8] ;to make it more visable
+  ask environment [set color white]
+  ask environment [
+    set environment-carbon-emission 0 ; set carbon environment equal to 0
+    ifelse show-carbon? ;relates to the switch in the interface whether you want to show the carbon level of the environment or not.
+      [ set label precision environment-carbon-emission 2 ]
+      [ set label "" ]
+  ]
+end
+
+
+to setup-ccs
+  set ccs-patches (patches at-points [[-30 -14] [-24 -14] [-18 -14] [-12 -14] [-6 -14] [0 -14] [6 -14] [12 -14] [18 -14] [24 -14] [30 -14]]) ;in the rest of the script remembers these patches as ccs-patches
+  ask ccs-patches [
+      set pcolor grey ;set the color of these patches to grey
+      ifelse show-carbon-stored? ;relates to the switch in the interface whether you want to show the carbon level of one storage or not.
+      [ set plabel precision carbon-stored 2 ]
+      [ set plabel "" ]
+      ]
+end
+
+
+to display-labels
+  ask industries [
+    ifelse show-carbon? ;relates to the switch in the interface whether you want to show the carbon level of one industry or not.
+      [ set label precision industry-carbon-emission 2 ]
+      [ set label "" ]
+  ]
+    ask environment [
+    ifelse show-carbon? ;relates to the switch in the interface whether you want to show the absorbed carbon of the environment or not.
+      [ set label precision environment-carbon-emission 2 ]
+      [ set label "" ]
+  ]
+  ask ccs-patches [
+      ifelse show-carbon-stored? ;relates to the switch in the interface whether you want to show the carbon level of one storage or not.
+      [ set plabel precision carbon-stored 2 ]
+      [ set plabel "" ]
+  ]
+end
+
+
+to setup-data
+  set yearly-info-list [
+    [1 20 450] ; year, carbon-price, oil-price
+    [2 20 430]
+    [3 20 420]
+    [4 30 400]
+    [5 30 380]
+    [6 30 380]
+    [7 40 380]
+    [8 50 400]
+    [9 50 420]
+    [10 60 440]
+    [11 60 480]
+    [12 60 520]
+    [13 60 580]
+    [14 70 600]
+    [15 80 620]
+    [16 80 640]
+    [17 80 690]
+    [18 80 700]
+    [19 80 720]
+    [20 90 750]
+    [21 100 800]
+    [22 110 800]
+    [23 120 800]
+    [24 130 600]
+    [25 140 400]
+    [26 200 300]
+    [27 220 200]
+    [28 240 200]
+    [29 260 200]
+    [30 280 180]
+    [31 300 180]
+    [32 350 180]]
+
+  set ccs-list [
+    ["Q16-1" 3 606.6 29670 0 -14] ; storage-location, capacity, fixed-infra-capex, fixed-infra-opex, xcor patch, ycor patch
+    ["Q16-3" 7 1412.8 69230 6 -14]
+    ["Q16-2" 5 1013.8 49450 -6 -14]
+    ["P18-1" 15 3062.7 148350 12 -14]
+    ["P18-4" 6 1269.5 59340 -12 -14]
+    ["P18-3" 20 4100 197800 18 -14]
+    ["P18-2" 10 2091.2 98900 -18 -14]
+    ["P15" 12 2505.5 118680 24 -14]
+    ["Q1" 35 7580.6 346150 -24 -14]
+    ["K12" 50 10987 494500 30 -14]
+    ["Southern North Sea" 40 10092.6 395600 -30 -14]]
+
+  set subsidy govt-subsidy ; Meur
+  set median-opex 36350 ;Meur
+  set capacity 100
+end
+
+
+to open-file
+  file-open "output-datafile.txt"
+end
+
+to close-file
+  file-close-all
+end
+
+to go-once ;same function as go-forever, but doesn't repeat itself and needs setup to clear-all.
+  file-open "output-datafile-once.txt"
+  set yes-ccs []
+  set no-ccs []
+  set industries-emit []
+  set industries-stored []
+
+  foreach yearly-info-list [
+    ask industries with [color = black] [ ;only ask the black ones because that are the industries that haven't said yes to ccs yet. An industry turns red when it joins ccs.
+      calculate-electrification
+      calculate-ccs-vs-carbonprice
+      set total-carbon-for-storage sum yes-ccs
+      set total-carbon-emitted sum no-ccs
+      set environment-carbon-emission total-carbon-emitted
+    ]
+
+    ask industries [
+      set industries-emit lput remaining-emissions industries-emit
+      set industries-stored lput carbon-stored-per-indus industries-stored
+      set-current-plot "industries joining ccs"
+      plotxy year length yes-ccs
+      set-current-plot "cumulative carbon to atmosphere"
+      plotxy year sum no-ccs] ;this is wrong
+
+    verify-industry ; for verification steps
+    set year (year + 1)
+    ]
+
+
+  foreach ccs-list [
+    ask patch (item 4 (item ccs ccs-list)) (item 5 (item ccs ccs-list)) [ ;ask the patch with the xcor and ycor from ccs-list the following
+      set max-capacity (item 1 (item ccs ccs-list))                       ;set a certain max capacity to a certain storage location
+      set name-location (item 0 (item ccs ccs-list))                      ;assign names to the storage locations
+      ifelse [pcolor] of patch (item 4 (item ccs ccs-list)) (item 5 (item ccs ccs-list))  = grey [ ;when the color of the specific patch is grey, store carbon.
+        store-carbon] [] ;if not (so red), do nothing because storage is already in use.
+       ]
+
+    set ccs (ccs + 1)
+   ]
+
+  verify-ccs ; for verification steps
+
+  calculate-averages ;calculates the averages of the emitted and stored carbon over 32 years per industry
+  emit-remaining-carbon ;rest of the carbon that doesn't fit into ccs-locations needs to be emitted
+
+file-close
+display-labels
+end
+
+to go-forever ;will loop through the go-function, clear all, setup again and loop through the go-function again forever - for data analysis
+  set yes-ccs []
+  set no-ccs []
+  set industries-emit []
+  set industries-stored []
+
+  foreach yearly-info-list [
+    ask industries with [color = black] [ ;only ask the black ones because that are the industries that haven't said yes to ccs yet. An industry turns red when it joins ccs.
+      calculate-electrification
+      calculate-ccs-vs-carbonprice
+      set total-carbon-for-storage sum yes-ccs
+      set total-carbon-emitted sum no-ccs
+      set environment-carbon-emission total-carbon-emitted
+    ]
+
+    ask industries [set industries-emit lput remaining-emissions industries-emit
+                    set industries-stored lput carbon-stored-per-indus industries-stored
+                    ]
+
+    set year (year + 1)
+    ]
+
+  foreach ccs-list [
+    ask patch (item 4 (item ccs ccs-list)) (item 5 (item ccs ccs-list)) [
+      set max-capacity (item 1 (item ccs ccs-list))
+      set name-location (item 0 (item ccs ccs-list))
+      ifelse [pcolor] of patch (item 4 (item ccs ccs-list)) (item 5 (item ccs ccs-list))  = grey [
+        store-carbon] [] ;if grey, store carbon if not (so red), do nothing because storage is already in use.
+    ]
+
+   set ccs (ccs + 1)
+   ]
+
+  calculate-averages ;calculates the averages of the emitted and stored carbon over 32 years per industry
+  emit-remaining-carbon ;rest of the carbon that doesn't fit into ccs-locations needs to be emitted
+
+display-labels
+
+  clear-all
+  setup-patches
+  setup-industries
+  setup-environment
+  setup-ccs
+  setup-data
+  set year 0
+  set ccs 0
+  reset-ticks
+
+end
+
+
+to calculate-averages
+  set sum-industries-emit sum industries-emit ;sum all the industries their emissions when they didn't choose to do ccs
+  set sum-industries-stored sum industries-stored ;sum all the industries their carbon stored when they choose to do ccs
+  set avg-industries-emit (sum-industries-emit / 25) ;divide the sum with 25 industries to retrieve the average amount that is emitted over 32 years per industry
+  set avg-industries-stored (sum-industries-stored / 25) ;divide the sum with 25 industries to retrieve the average amount that is stored over 32 years per industry
+
+  open-file
+  file-write avg-industries-emit ;write this average to an outputdata file every time the go-function resets
+  file-type "\t"
+  file-write avg-industries-stored ;write this average to an outputdata file every time the go-function resets
+  file-type "\n"
+end
+
+
+to calculate-electrification
+  if industry-carbon-emission < 1.0 [;set pcolor blue ;company is considered a 'small emitter' when carbon emission is beneath 1.0 Mton
+                                     set remaining-emissions precision (industry-carbon-emission * (1 - (electrification-small-emitters / 100))) 2]
+  if industry-carbon-emission > 2.0 [;set pcolor red ;company is considered a 'large emitter' when carbon emission is above 2.0 Mton
+                                     set remaining-emissions precision (industry-carbon-emission * (1 - (electrification-large-emitters / 100))) 2]
+  if industry-carbon-emission >= 1.0 and industry-carbon-emission <= 2.0 [;set pcolor yellow ;;company is considered a 'medium emitter' when carbon emission is between 1 and between 2 Mton
+                                     set remaining-emissions precision (industry-carbon-emission * (1 - (electrification-medium-emitters / 100))) 2]
+end
+
+
+to calculate-ccs-vs-carbonprice
+  set decision-year (item 0 (item year yearly-info-list))
+  set carbon-price (item 1 (item year yearly-info-list))
+  set oil-price (item 2 (item year yearly-info-list))
+  set industry-oil-expenses (industry-oil-demand * oil-price)
+  set industry-carbon-expenses ((remaining-emissions * carbon-price) + industry-oil-expenses)
+  set industry-ccs-expenses ((((median-opex / capacity *  remaining-emissions)) - ((subsidy / total-emissions) *  remaining-emissions)) + industry-oil-expenses)
+  if industry-carbon-expenses < industry-ccs-expenses [set color black
+                                                       set join-ccs "no"
+                                                       set no-ccs lput remaining-emissions no-ccs
+                                                       set carbon-stored-per-indus 0] ;no-ccs
+  if industry-carbon-expenses >= industry-ccs-expenses [set color red
+                                                       set join-ccs "yes"
+                                                       set yes-ccs lput remaining-emissions yes-ccs
+                                                       set carbon-stored-per-indus remaining-emissions
+                                                       set remaining-emissions 0] ;yes-ccs
+  set median-opex (median-opex * 0.9975) ;opex becomes 10% cheaper every year
+end
+
+
+to store-carbon
+     ifelse total-carbon-for-storage >= max-capacity [
+        set carbon-stored max-capacity
+        set pcolor red
+        set total-carbon-for-storage (total-carbon-for-storage - carbon-stored)] [
+        set carbon-stored total-carbon-for-storage
+       set pcolor orange
+       set total-carbon-for-storage 0
+    if carbon-stored = 0 [set pcolor grey]]
+end
+
+
+to emit-remaining-carbon
+  set environment-carbon-emission (total-carbon-for-storage + total-carbon-emitted)
+  set total-carbon-for-storage 0
+end
+
+to verify-industry
+    ask industries [
+      file-open (word (govt-subsidy) "industry-" (who + 1) ".txt")
+      file-write decision-year
+      file-type "\t"
+      file-write carbon-price
+      file-type "\t"
+      file-write oil-price
+      file-type "\t"
+      file-write precision industry-carbon-emission 2
+      file-type "\t"
+      file-write precision industry-carbon-expenses 2
+      file-type "\t"
+      file-write precision industry-ccs-expenses 2
+      file-type "\t"
+      file-write join-ccs
+      file-type "\t"
+      file-type precision remaining-emissions 2
+      file-type "\t"
+      file-type precision carbon-stored-per-indus 2
+    file-type "\n"
+      file-close]
+end
+
+to verify-ccs
+  ask ccs-patches [ ; write information about ccs to text file
+      file-open ("ccs-locations.txt")
+      file-write name-location
+      file-type "\t"
+      file-write max-capacity
+      file-type "\t"
+      file-write total-carbon-for-storage
+      file-type "\t"
+      file-write carbon-stored
+      file-type "\n"
+      file-close]
+end
